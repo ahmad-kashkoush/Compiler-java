@@ -5,5 +5,6 @@
       git clone git@github.com:ahmad-kashkoush/Compiler-java.git
       cd Compiler-java # or just double click if you use windows
       mvn clean install  # this will install all plugins and packages in your pom.xml file
+      mvn clean compile # will create Parser.java in target 
 ```
-3. that's it for now, I'll update when I finish
+3. Run App.java
