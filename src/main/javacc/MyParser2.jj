@@ -1,0 +1,412 @@
+options {
+  STATIC = false;
+  LOOKAHEAD = 2;
+}
+
+PARSER_BEGIN(JavaParser)
+package org.example;  // Add this package declaration
+import java.io.*;
+import java.util.HashSet;
+import java.util.Set;
+import org.example.TokenMgrException;  // Add this import
+public class JavaParser {
+    private Set declaredVariables = new HashSet();
+
+    public static void main(String args[]) {
+        JavaParser parser;
+        try {
+  // Use input.txt as the source for the Reader
+            File inputFile = new File("src/main/resources/HelloWorld.java");
+            if (!inputFile.exists()) {
+                throw new FileNotFoundException("File resources/input.txt does not exist.");
+            }
+
+            BufferedReader br = new BufferedReader(new FileReader(inputFile));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            String input = sb.toString();
+
+            // First pass: check for lowercase "string"
+            if (input.contains("string")) {
+                System.out.println("Error: Found lowercase 'string'. Java requires 'String' with capital 'S'.");
+                return;
+            }
+
+            parser = new JavaParser(new StringReader(input));
+            parser.CompilationUnit();
+            System.out.println("Syntax validation successful.\n");
+
+            System.out.println("Symbol Table:");
+            System.out.println("--------------------------------------------");
+            System.out.printf("%-15s %-15s %-8s %s%n", "TOKEN TYPE", "VALUE", "LINE", "COLUMN");
+            System.out.println("--------------------------------------------");
+
+            JavaParser tokenParser = new JavaParser(new StringReader(input));
+            Token token;
+            while ((token = tokenParser.getNextToken()).kind != EOF) {
+                System.out.printf("%-15s %-15s %-8d %d%n",
+                    tokenImage[token.kind],
+                    token.image,
+                    token.beginLine,
+                    token.beginColumn);
+            }
+
+        } catch (ParseException e) {
+            System.out.println("Syntax Error: " + e.getMessage());
+        } catch (TokenMgrException e) {
+            System.out.println("Lexical Error: " + e.getMessage());
+        } catch (IOException e) {
+            System.out.println("IO Error: " + e.getMessage());
+        }
+    }
+
+    private void error_skipto(int kind, String message) {
+        Token t = token;
+        System.out.println("Syntax Error at line " + t.beginLine +
+            ", column " + t.beginColumn + ": " + message);
+
+        try {
+            do {
+                t = getNextToken();
+            } while (t.kind != kind && t.kind != SEMICOLON && t.kind != EOF);
+
+            if (t.kind == kind) {
+                token = t;
+            }
+        } catch (TokenMgrException e) {
+            System.out.println("Error during recovery: " + e.getMessage());
+        }
+    }
+
+    private void handleParenError(Token t) {
+        System.out.println("Syntax Error at line " + t.beginLine +
+            ", column " + t.beginColumn + ": Expected '(' after 'if'");
+    }
+
+    private void addDeclaredVariable(String varName) {
+        declaredVariables.add(varName);
+    }
+
+    private boolean isVariableDeclared(String varName) {
+        return declaredVariables.contains(varName);
+    }
+}
+
+PARSER_END(JavaParser)
+
+SKIP : {
+    " " | "\t" | "\n" | "\r" | "\f"
+    | < "//" (~["\n","\r"])* ("\n"|"\r"|"\r\n") >
+    | < "/*" (~["*"])* "*" (~["/"] (~["*"])* "*")* "/" >
+}
+
+TOKEN : {
+    < PUBLIC: "public" >
+  | < PRIVATE: "private" >
+  | < PROTECTED: "protected" >
+  | < STATIC: "static" >
+  | < CLASS: "class" >
+  | < VOID: "void" >
+  | < MAIN: "main" >
+  | < NEW: "new" >
+  | < IF: "if" >
+  | < ELSE: "else" >
+  | < RETURN: "return" >
+  | < EXTENDS: "extends" >
+  | < IMPLEMENTS: "implements" >
+  | < INT: "int" >
+  | < STRING: "String" >
+  | < BOOLEAN: "boolean" >
+  | < SYSTEM: "System" >
+  | < OUT: "out" >
+  | < PRINTLN: "println" >
+  | < INTEGER_LITERAL: (["0"-"9"])+ >
+  | < STRING_LITERAL: "\"" (~["\"","\\","\n","\r"])* "\"" >
+  | < IDENTIFIER: ["a"-"z","A"-"Z","_"] (["a"-"z","A"-"Z","0"-"9","_"])* >
+  | < PLUS: "+" >
+  | < MINUS: "-" >
+  | < MULTIPLY: "*" >
+  | < DIVIDE: "/" >
+  | < GT: ">" >
+  | < LT: "<" >
+  | < GE: ">=" >
+  | < LE: "<=" >
+  | < EQ: "==" >
+  | < NE: "!=" >
+  | < ASSIGN: "=" >
+  | < SEMICOLON: ";" >
+  | < DOT: "." >
+  | < COMMA: "," >
+  | < LPAREN: "(" >
+  | < RPAREN: ")" >
+  | < LBRACE: "{" >
+  | < RBRACE: "}" >
+  | < LBRACKET: "[" >
+  | < RBRACKET: "]" >
+}
+
+void CompilationUnit() : {}
+{
+    (
+        ClassDeclaration()
+        |
+        Statement()
+    )
+    <EOF>
+}
+
+void ClassDeclaration() : {}
+{
+    <PUBLIC> <CLASS> <IDENTIFIER>
+    [ <EXTENDS> <IDENTIFIER> ]
+    [ <IMPLEMENTS> ImplementsList() ]
+    ClassBody()
+}
+
+void ImplementsList() : {}
+{
+    <IDENTIFIER> ( <COMMA> <IDENTIFIER> )*
+}
+
+void ClassBody() : {}
+{
+    <LBRACE>
+        ( ClassBodyDeclaration() )*
+    <RBRACE>
+}
+
+void ClassBodyDeclaration() : {}
+{
+    LOOKAHEAD( [ <PUBLIC> | <PRIVATE> | <PROTECTED> ] Type() <IDENTIFIER> <LPAREN> )
+    MethodDeclaration()
+    |
+    LOOKAHEAD( [ <PUBLIC> | <PRIVATE> | <PROTECTED> ] <STATIC> <VOID> <MAIN> )
+    MainMethod()
+    |
+    FieldDeclaration()
+}
+
+void FieldDeclaration() : {}
+{
+    [ <PUBLIC> | <PRIVATE> | <PROTECTED> ]
+    [ <STATIC> ]
+    Type() <IDENTIFIER> [ <ASSIGN> Expression() ] <SEMICOLON>
+}
+
+void MainMethod() : {}
+{
+    <PUBLIC> <STATIC> <VOID> <MAIN>
+    <LPAREN> <STRING> <LBRACKET> <RBRACKET> <IDENTIFIER> <RPAREN>
+    Block()
+}
+
+void MethodDeclaration() : {}
+{
+    [ <PUBLIC> | <PRIVATE> | <PROTECTED> ]
+    [ <STATIC> ]
+    ReturnType() <IDENTIFIER> <LPAREN> [ ParameterList() ] <RPAREN>
+    Block()
+}
+
+void ReturnType() : {}
+{
+    <VOID> | Type()
+}
+
+void ParameterList() : {}
+{
+    Parameter() ( <COMMA> Parameter() )*
+}
+
+void Parameter() : {}
+{
+    Type() <IDENTIFIER>
+}
+
+void Block() : {}
+{
+    <LBRACE> ( BlockStatement() )* <RBRACE>
+}
+
+void BlockStatement() : {}
+{
+    LOOKAHEAD(2)
+    LocalVariableDeclaration()
+    |
+    Statement()
+}
+
+void LocalVariableDeclaration() :
+{
+    Token t;
+}
+{
+    Type() t = <IDENTIFIER> {
+        addDeclaredVariable(t.image);
+    }
+    [ <ASSIGN> Expression() ] <SEMICOLON>
+}
+
+void Statement() : {}
+{
+    LOOKAHEAD(2)
+    Block()
+    |
+    IfStatement()
+    |
+    ReturnStatement()
+    |
+    ExpressionStatement()
+    |
+    LocalVariableDeclaration()
+}
+
+void ExpressionStatement() : {}
+{
+    Expression() <SEMICOLON>
+}
+
+void IfStatement() :
+{
+    Token t;
+}
+{
+    <IF> <LPAREN> Expression() <RPAREN> Statement() [ LOOKAHEAD(1) <ELSE> Statement() ]
+    |
+    <IF> {
+        throw new ParseException("Expected '(' after 'if'");
+    }
+}
+
+void ReturnStatement() : {}
+{
+    <RETURN> [ Expression() ] <SEMICOLON>
+}
+
+void Type() : {}
+{
+    PrimitiveType() [ <LBRACKET> <RBRACKET> ]
+    |
+    ReferenceType() [ <LBRACKET> <RBRACKET> ]
+}
+
+void PrimitiveType() : {}
+{
+    <INT> | <BOOLEAN>
+}
+
+void ReferenceType() : {}
+{
+    <STRING> | <IDENTIFIER>
+}
+
+void Expression() : {}
+{
+    ConditionalExpression()
+    |
+    AssignmentExpression()
+    |
+    ObjectCreation()
+    |
+    PrimaryExpression()
+}
+
+void ObjectCreation() : {}
+{
+    <NEW> <IDENTIFIER> <LPAREN> [ ArgumentList() ] <RPAREN>
+}
+
+void AssignmentExpression() :
+{
+    Token t;
+}
+{
+    t = <IDENTIFIER> {
+        if (!isVariableDeclared(t.image)) {
+            throw new ParseException("Variable '" + t.image + "' used before declaration");
+        }
+    }
+    // تأكد من أن التخصيص يتم باستخدام = فقط
+    <ASSIGN> Expression() // تخصيص صحيح
+    |
+    // إذا تم اكتشاف == هنا، يجب أن نعرض رسالة خطأ مخصصة
+    t = <IDENTIFIER> {
+        if (!isVariableDeclared(t.image)) {
+            throw new ParseException("Variable '" + t.image + "' used before declaration");
+        }
+    }
+    <EQ> Expression() {
+        throw new ParseException("Error: '==' is used for comparison, use '=' for assignment.");
+    }
+}
+
+
+
+void ConditionalExpression() : {}
+{
+    RelationalExpression() [ BinaryOperator() RelationalExpression() ]
+}
+
+void RelationalExpression() : {}
+{
+    AdditiveExpression() [ ComparisonOperator() AdditiveExpression() ]
+}
+
+void BinaryOperator() : {}
+{
+    <PLUS> | <MINUS> | <MULTIPLY> | <DIVIDE>
+}
+
+void ComparisonOperator() : {}
+{
+    <GT> | <LT> | <GE> | <LE> | <EQ> | <NE>
+}
+
+void AdditiveExpression() : {}
+{
+    MultiplicativeExpression() ( ( <PLUS> | <MINUS> ) MultiplicativeExpression() )*
+}
+
+void MultiplicativeExpression() : {}
+{
+    PrimaryExpression() ( ( <MULTIPLY> | <DIVIDE> ) PrimaryExpression() )*
+}
+
+void PrimaryExpression() :
+{
+    Token t;
+}
+{
+    <INTEGER_LITERAL>
+    |
+    <STRING_LITERAL>
+    |
+    MethodInvocation()
+    |
+    t = <IDENTIFIER> {
+        if (!isVariableDeclared(t.image)) {
+            throw new ParseException("Variable '" + t.image + "' used before declaration");
+        }
+    }
+    |
+    <LPAREN> Expression() <RPAREN>
+}
+
+void MethodInvocation() : {}
+{
+    (
+        <IDENTIFIER> <DOT> <IDENTIFIER> <LPAREN> [ ArgumentList() ] <RPAREN>
+    )
+    |
+    (
+        <SYSTEM> <DOT> <OUT> <DOT> <PRINTLN> <LPAREN> Expression() <RPAREN>
+    )
+}
+
+void ArgumentList() : {}
+{
+    Expression() ( <COMMA> Expression() )*
+}
