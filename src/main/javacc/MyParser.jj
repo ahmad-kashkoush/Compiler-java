@@ -1,0 +1,88 @@
+options {
+  STATIC = false;
+}
+
+PARSER_BEGIN(Calculator)
+package org.example;
+
+import java.io.*;
+import java.util.*;
+
+public class Calculator {
+  public static void main(String args[]) {
+        try {
+            // Use input.txt as the source for the Reader
+            File inputFile = new File("src/main/resources/input.txt");
+            if (!inputFile.exists()) {
+                throw new FileNotFoundException("File resources/input.txt does not exist.");
+            }
+
+            BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+
+            String line;
+            while ((line = reader.readLine()) != null) { // Read each line from input.txt
+                if (line.trim().isEmpty()) continue; // Skip empty lines
+
+                try {
+                    Calculator parser = new Calculator(new StringReader(line));
+                    int result = parser.Expression(); // Parse and calculate the result
+                    System.out.println("Expression: " + line + " -> Result: " + result);
+                } catch (ParseException e) {
+                    System.err.println("Error parsing expression: " + line + " (" + e.getMessage() + ")");
+                } catch (Exception e) {
+                    // Catch unexpected exceptions to avoid crashing
+                    System.err.println("Unexpected error processing expression: " + line + " (" + e.getMessage() + ")");
+                }
+            }
+
+            reader.close();
+        } catch (FileNotFoundException e) {
+            System.err.println("Error: input.txt not found in resources directory.");
+        } catch (IOException e) {
+            System.err.println("Error reading input.txt: " + e.getMessage());
+        } catch (Exception e) {
+            // Catch any other unforeseen exceptions
+            System.err.println("An unexpected error occurred: " + e.getMessage());
+        }
+
+
+
+  }
+}
+PARSER_END(Calculator)
+
+SKIP : {
+  " "
+| "\t"
+| "\n"
+| "\r"
+}
+
+TOKEN : {
+  < NUMBER: (["0"-"9"])+ >
+| < PLUS: "+" >
+| < MINUS: "-" >
+}
+
+
+int Expression() : {
+  int result;
+  int term;
+}
+{
+  result = Term() // Parse the first number
+  (
+    (
+      < PLUS > term = Term() { result += term; } // Add term
+    | < MINUS > term = Term() { result -= term; } // Subtract term
+    )*
+  )
+  { return result; }
+}
+
+int Term() : {
+  Token t;
+}
+{
+  t = < NUMBER > { return Integer.parseInt(t.image); }
+}
